@@ -7,42 +7,49 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. 升级 checkout 到 v6，原生支持 Node.js 24
-      # 参考：https://github.com/actions/checkout/releases
-      - name: Checkout the code
+      - name: Checkout builder
         uses: actions/checkout@v6
 
-      # 2. 升级 setup-java 到 v5，原生支持 Node.js 24
-      # 参考：https://github.com/actions/setup-java/releases
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'    # 注意这里也从 '8' 升级到了 '17'
+          java-version: '17'
 
-      # 3. 修复 set-output 弃用警告的代码块（写法已更新）
-      - id: get-project
-        name: Get project name
-        run: |
-          echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
+      - name: Get project repo
+        id: get-project
+        run: echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
 
-      # 4. 克隆你的 TVBox 项目源码
-      - name: Clone project
+      - name: Clone TVBox project
         run: git clone --depth=1 ${{ steps.get-project.outputs.PROJECT }} project
 
-      # 5. 构建 Debug APK
-      - name: Build the app
+      - name: Find Gradle project root
+        id: find-root
         working-directory: ./project
-        # 保留了 --stacktrace 参数，以便在失败时输出详细的错误日志
         run: |
-          if [ ! -f "gradlew" ]; then gradle wrapper; fi
+          # 查找包含 settings.gradle 的目录
+          GRADLE_ROOT=$(find . -name "settings.gradle*" -printf "%h\n" | head -1)
+          if [ -z "$GRADLE_ROOT" ]; then
+            echo "❌ No settings.gradle found in cloned repo"
+            echo "Contents of project directory:"
+            ls -la
+            exit 1
+          fi
+          echo "✅ Found Gradle root at: $GRADLE_ROOT"
+          echo "root=$GRADLE_ROOT" >> $GITHUB_OUTPUT
+
+      - name: Build APK
+        working-directory: ./project/${{ steps.find-root.outputs.root }}
+        run: |
+          # 如果没有 gradlew，则生成
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 6. 升级 upload-artifact 到 v5，原生支持 Node.js 24
-      # 参考：https://github.com/actions/upload-artifact/releases
       - name: Upload APK
         uses: actions/upload-artifact@v5
         with:
           name: my-build-apk
-          path: project/app/build/outputs/apk/debug/*.apk
+          path: ./**/*.apk
