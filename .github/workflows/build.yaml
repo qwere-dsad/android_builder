@@ -6,26 +6,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '8'
+
       - id: get-project
         name: Get project name
-        run: |
-          echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
+        run: echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
+
       - name: Clone project
         run: git clone --depth=1 ${{ steps.get-project.outputs.PROJECT }} project
+
       - name: Build the app
         working-directory: ./project
         run: |
           if [ ! -f "gradlew" ]; then gradle wrapper; fi
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
