@@ -7,31 +7,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      # 强制执行 Node.js 24 环境
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
+      # 可选：如果你使用 Java 17, 可以设置为 17
+      # JAVA_VERSION: 17
 
+    steps:
+      # 1. 升级 actions/checkout 到 v4
+      - name: Checkout the code
+        uses: actions/checkout@v4
+
+      # 2. 升级 actions/setup-java 到 v4, 并指定 Java 17 以提高兼容性
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '8'
+          java-version: '17' # 升级到 Java 17
 
+      # 3. 修复 set-output 弃用警告
       - id: get-project
         name: Get project name
-        run: echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
+        run: |
+          echo "PROJECT=$(cat project-to-build)" >> $GITHUB_OUTPUT
 
+      # 4. 克隆你的 TVBox 项目源码
       - name: Clone project
         run: git clone --depth=1 ${{ steps.get-project.outputs.PROJECT }} project
 
+      # 5. 构建 Debug APK
       - name: Build the app
         working-directory: ./project
+        # 增加了 --info 参数，以便在失败时输出更详细的错误日志
         run: |
           if [ ! -f "gradlew" ]; then gradle wrapper; fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
+      # 6. 升级 actions/upload-artifact 到 v4, 并修正 APK 路径
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
